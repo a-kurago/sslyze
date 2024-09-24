@@ -223,6 +223,8 @@ def _test_client_renegotiation(server_info: ServerConnectivityInfo) -> Tuple[_Sc
             elif "wrong version number" in e.args[0]:
                 # Seen with exim 4.92-5 + gnutls 3.7.1
                 accepts_client_renegotiation = False
+            elif "routines:ssl3_read_bytes:reason(1000)" in e.args[0]:
+                accepts_client_renegotiation = False
 
             else:
                 raise
