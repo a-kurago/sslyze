@@ -19,6 +19,7 @@ from sslyze.mozilla_tls_profile.mozilla_config_checker import (
     ServerNotCompliantWithMozillaTlsConfiguration,
     ServerScanResultIncomplete,
 )
+from sslyze.mozilla_complience_saver import MozillaComplianceSaver
 
 
 def main() -> None:
@@ -123,6 +124,12 @@ def main() -> None:
                 for criteria, error_description in e.issues.items():
                     print(f"        * {criteria}: {error_description}")
                 print()
+
+                if parsed_command_line.json_path_out and not parsed_command_line.should_print_json_to_console:
+                    MozillaComplianceSaver.update_report_file(
+                        issues=e.issues,
+                        json_file_path=parsed_command_line.json_path_out,
+                    )
 
             except ServerScanResultIncomplete:
                 are_all_servers_compliant = False
