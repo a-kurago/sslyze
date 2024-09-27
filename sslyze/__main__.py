@@ -118,6 +118,12 @@ def main() -> None:
                 )
                 print(f"    {server_scan_result.server_location.display_string}: OK - Compliant.\n")
 
+                if parsed_command_line.json_path_out and not parsed_command_line.should_print_json_to_console:
+                    MozillaComplianceSaver.update_report_file(
+                        issues={},
+                        json_file_path=parsed_command_line.json_path_out,
+                    )
+
             except ServerNotCompliantWithMozillaTlsConfiguration as e:
                 are_all_servers_compliant = False
                 print(f"    {server_scan_result.server_location.display_string}: FAILED - Not compliant.")

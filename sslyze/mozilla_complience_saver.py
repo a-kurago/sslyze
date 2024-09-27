@@ -13,6 +13,7 @@ class MozillaComplianceSaver:
         for criteria, error_description in issues.items():
             mozilla_compliance_issuses[criteria] = error_description
 
+        report['mozilla_compliance'] = not bool(mozilla_compliance_issuses)
         report['mozilla_compliance_issues'] = mozilla_compliance_issuses
 
         updated_report_text = json.dumps(report, indent=2)
