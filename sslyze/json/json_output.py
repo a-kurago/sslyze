@@ -216,11 +216,24 @@ class InvalidServerStringAsJson(BaseModelWithOrmModeAndForbid):
     error_message: str
 
 
+class MozillaComplianceIssue(BaseModel):
+    mozilla_config: str
+    criteria: str
+    description: str
+
+
+class MozillaCompliance(BaseModel):
+    """A summary of the compliance with Mozilla's SSL/TLS standards."""
+    server: str
+    issues: List[MozillaComplianceIssue]
+
+
 class SslyzeOutputAsJson(BaseModel):
     """The "root" dictionary of the JSON output when using the --json command line option."""
 
     invalid_server_strings: List[InvalidServerStringAsJson]
     server_scan_results: List[ServerScanResultAsJson]
+    mozilla_compliance: List[MozillaCompliance]
 
     date_scans_started: datetime
     date_scans_completed: datetime

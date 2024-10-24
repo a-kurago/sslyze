@@ -2,6 +2,7 @@ import sys
 from datetime import datetime
 from typing import Optional, TextIO
 
+from sslyze.mozilla_compliance import MozillaComplianceChecker
 from sslyze.cli.console_output import ObserverToGenerateConsoleOutput
 from sslyze.__version__ import __version__
 from sslyze.cli.command_line_parser import CommandLineParsingError, CommandLineParser
@@ -13,13 +14,10 @@ from sslyze import (
     ServerScanResultAsJson,
     ServerConnectivityStatusEnum,
 )
-from sslyze.json.json_output import InvalidServerStringAsJson
+from sslyze.json.json_output import InvalidServerStringAsJson, MozillaComplianceIssue
 from sslyze.mozilla_tls_profile.mozilla_config_checker import (
     MozillaTlsConfigurationChecker,
-    ServerNotCompliantWithMozillaTlsConfiguration,
-    ServerScanResultIncomplete,
 )
-from sslyze.mozilla_complience_saver import MozillaComplianceSaver
 
 
 def main() -> None:
@@ -68,6 +66,12 @@ def main() -> None:
             # Results are actually displayed by the observer; here we just store them
             all_server_scan_results.append(result)
 
+    mozilla_compliance_checker = MozillaComplianceChecker(
+        MozillaTlsConfigurationChecker.get_default()
+    )
+
+    mozilla_compliance = mozilla_compliance_checker.check(all_server_scan_results)
+
     # Write results to a JSON file if needed
     json_file_out: Optional[TextIO] = None
     if parsed_command_line.should_print_json_to_console:
@@ -84,6 +88,7 @@ def main() -> None:
             ],
             date_scans_started=date_scans_started,
             date_scans_completed=datetime.utcnow(),
+            mozilla_compliance=mozilla_compliance,
         )
         json_output_as_str = json_output.model_dump_json(indent=2)
         json_file_out.write(json_output_as_str)
@@ -102,51 +107,21 @@ def main() -> None:
     title = ObserverToGenerateConsoleOutput._format_title("Compliance against Mozilla TLS configuration")
     print()
     print(title)
-    if not parsed_command_line.check_against_mozilla_config:
-        print("    Disabled; use --mozilla_config={old, intermediate, modern}.\n")
-    else:
-        print(
-            f'    Checking results against Mozilla\'s "{parsed_command_line.check_against_mozilla_config}"'
-            f" configuration. See https://ssl-config.mozilla.org/ for more details.\n"
-        )
-        mozilla_checker = MozillaTlsConfigurationChecker.get_default()
-        for server_scan_result in all_server_scan_results:
-            try:
-                mozilla_checker.check_server(
-                    against_config=parsed_command_line.check_against_mozilla_config,
-                    server_scan_result=server_scan_result,
-                )
-                print(f"    {server_scan_result.server_location.display_string}: OK - Compliant.\n")
 
-                if parsed_command_line.json_path_out and not parsed_command_line.should_print_json_to_console:
-                    MozillaComplianceSaver.update_report_file(
-                        issues={},
-                        json_file_path=parsed_command_line.json_path_out,
-                    )
+    for result in mozilla_compliance:
+        if result.issues:
+            print(f"    {result.server}: FAILED - Not compliant.")
+            print_issues(result.issues)
+        else:
+            print(f"    {result.server}: OK - Compliant.")
 
-            except ServerNotCompliantWithMozillaTlsConfiguration as e:
-                are_all_servers_compliant = False
-                print(f"    {server_scan_result.server_location.display_string}: FAILED - Not compliant.")
-                for criteria, error_description in e.issues.items():
-                    print(f"        * {criteria}: {error_description}")
-                print()
 
-                if parsed_command_line.json_path_out and not parsed_command_line.should_print_json_to_console:
-                    MozillaComplianceSaver.update_report_file(
-                        issues=e.issues,
-                        json_file_path=parsed_command_line.json_path_out,
-                    )
-
-            except ServerScanResultIncomplete:
-                are_all_servers_compliant = False
-                print(
-                    f"    {server_scan_result.server_location.display_string}: ERROR - Scan did not run successfully;"
-                    f" review the scan logs above."
-                )
-
-    if not are_all_servers_compliant:
-        # Return a non-zero error code to signal failure (for example to fail a CI/CD pipeline)
-        sys.exit(1)
+def print_issues(issues: list[MozillaComplianceIssue]) -> None:
+    for config in ['old', 'intermediate', 'modern']:
+        print(f"\n    Issues for {config} configuration:")
+        for issue in issues:
+            if issue.mozilla_config == config:
+                print(f"    * {issue.criteria}: {issue.description}")
 
 
 if __name__ == "__main__":
